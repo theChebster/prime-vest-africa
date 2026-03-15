@@ -7,21 +7,21 @@ export async function POST(req: Request) {
     const { phoneNumber, password } = await req.json();
 
     // 1. HARDCODED ADMIN CHECK
-    // This bypasses the database for your specific number
+    // Use quotes for the phone number to preserve the leading zero
     if (phoneNumber === '0256991802' && password === 'alaves') {
       return NextResponse.json({
         message: "Admin access granted",
         user: {
-          id: 999, // dummy ID
+          id: 999,
           name: "System Administrator",
-          balance: 0,
-          phoneNumber: phoneNumber,
+          balance: 0.00,
+          phoneNumber: '0256991802', // Fixed: Added quotes
           is_admin: true 
         }
       });
     }
 
-    // 2. REGULAR USER LOGIN (Database Check)
+    // 2. REGULAR USER LOGIN
     const users = await sql`SELECT * FROM users WHERE phone_number = ${phoneNumber}`;
     
     if (users.length === 0) {
@@ -30,7 +30,7 @@ export async function POST(req: Request) {
 
     const user = users[0];
 
-    // 3. Compare passwords for regular users
+    // 3. Compare passwords
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return NextResponse.json({ message: "Invalid password" }, { status: 401 });
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
         id: user.id,
         name: user.name,
         balance: user.balance,
-        phoneNumber: user.phone_number,
+        phoneNumber: user.phone_number, // Ensure this matches your frontend expectations
         is_admin: Boolean(user.is_admin) 
       }
     });
