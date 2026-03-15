@@ -1,19 +1,18 @@
+export const dynamic = 'force-dynamic';
 import { NextResponse } from "next/server";
 import sql from "@/lib/db";
 
 export async function GET() {
   try {
-    // 1. Get User Statistics
-    // This calculates the total number of registered users and the sum of all balances in the system
+    // 1. Get User Statistics (Total count and System Liability)
     const userStats = await sql`
       SELECT 
         COUNT(id)::int as user_count, 
-        SUM(balance)::float as total_liability 
+        COALESCE(SUM(balance), 0)::float as total_liability 
       FROM users
     `;
 
     // 2. Get Pending Transaction Counts
-    // This looks for deposits and withdrawals that haven't been approved yet
     const pendingDeposits = await sql`
       SELECT COUNT(id)::int as count 
       FROM transactions 
@@ -26,8 +25,7 @@ export async function GET() {
       WHERE type = 'withdrawal' AND status = 'pending'
     `;
 
-    // 3. Get Recent Activity Count (Optional but helpful)
-    // Counts how many transactions happened in the last 24 hours
+    // 3. Get Recent Activity (Last 24 hours)
     const dailyActivity = await sql`
       SELECT COUNT(id)::int as count 
       FROM transactions 

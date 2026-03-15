@@ -21,17 +21,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Invalid password" }, { status: 401 });
     }
 
-    // 3. Return user data (excluding sensitive password)
+    // 3. Return user data (including is_admin flag)
     return NextResponse.json({
       message: "Login successful",
       user: {
         id: user.id,
         name: user.name,
         balance: user.balance,
+        phoneNumber: user.phone_number,
+        // Added this line to pass the admin status to the frontend
+        is_admin: Boolean(user.is_admin) 
       }
     });
 
   } catch (error: any) {
+    console.error("Login Error:", error);
     return NextResponse.json({ message: "Server error", details: error.message }, { status: 500 });
   }
 }
