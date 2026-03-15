@@ -24,15 +24,15 @@ export default function LoginPage() {
       if (res.ok) {
         localStorage.setItem("pv_user", JSON.stringify(data.user));
 
-        // BULLETPROOF REDIRECT
+        // Detect Admin Status
         const isAdmin = 
           data.user.is_admin === true || 
           data.user.is_admin === "true" || 
           data.user.is_admin === 1;
 
         if (isAdmin) {
-          // Changed to match your actual folder structure
-          router.push("/dashboard/admin"); 
+          // REDIRECT FIX: Points to src/app/admin/admin/page.tsx
+          router.push("/admin/admin"); 
         } else {
           router.push("/dashboard");
         }
