@@ -1,50 +1,24 @@
-export const dynamic = 'force-dynamic';
 import { NextResponse } from "next/server";
 import sql from "@/lib/db";
 
 export async function GET() {
   try {
-    // 1. Get User Statistics (Total count and System Liability)
-    const userStats = await sql`
-      SELECT 
-        COUNT(id)::int as user_count, 
-        COALESCE(SUM(balance), 0)::float as total_liability 
-      FROM users
-    `;
-
-    // 2. Get Pending Transaction Counts
-    const pendingDeposits = await sql`
-      SELECT COUNT(id)::int as count 
-      FROM transactions 
-      WHERE type = 'deposit' AND status = 'pending'
-    `;
-
-    const pendingWithdrawals = await sql`
-      SELECT COUNT(id)::int as count 
-      FROM transactions 
-      WHERE type = 'withdrawal' AND status = 'pending'
-    `;
-
-    // 3. Get Recent Activity (Last 24 hours)
-    const dailyActivity = await sql`
-      SELECT COUNT(id)::int as count 
-      FROM transactions 
-      WHERE created_at > NOW() - INTERVAL '24 hours'
-    `;
+    // Get count of users
+    const userCount = await sql`SELECT COUNT(*) FROM users`;
+    // Sum of all balances
+    const balanceSum = await sql`SELECT SUM(balance) FROM users`;
+    // Count pending deposits
+    const deposits = await sql`SELECT COUNT(*) FROM transactions WHERE type = 'deposit' AND status = 'pending'`;
+    // Count pending withdrawals
+    const withdrawals = await sql`SELECT COUNT(*) FROM transactions WHERE type = 'withdrawal' AND status = 'pending'`;
 
     return NextResponse.json({
-      totalUsers: userStats[0].user_count || 0,
-      totalBalance: userStats[0].total_liability || 0,
-      pendingDeposits: pendingDeposits[0].count || 0,
-      pendingWithdrawals: pendingWithdrawals[0].count || 0,
-      dailyActivity: dailyActivity[0].count || 0
+      totalUsers: parseInt(userCount[0].count),
+      totalBalance: parseFloat(balanceSum[0].sum || 0),
+      pendingDeposits: parseInt(deposits[0].count),
+      pendingWithdrawals: parseInt(withdrawals[0].count)
     });
-
-  } catch (error: any) {
-    console.error("ADMIN_STATS_ERROR:", error.message);
-    return NextResponse.json(
-      { error: "Internal Server Error", details: error.message },
-      { status: 500 }
-    );
+  } catch (error) {
+    return NextResponse.json({ error: "Failed to fetch stats" }, { status: 500 });
   }
 }
