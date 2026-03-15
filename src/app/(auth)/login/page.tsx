@@ -32,7 +32,7 @@ export default function LoginPage() {
 
         if (isAdmin) {
           // REDIRECT FIX: Points to src/app/admin/admin/page.tsx
-          router.push("/admin/admin"); 
+          router.push("/admin"); 
         } else {
           router.push("/dashboard");
         }
