@@ -5,10 +5,12 @@ export async function POST(req: Request) {
   try {
     const { transactionId } = await req.json();
 
-    // 1. Get the transaction details
+    // 1. Fetch transaction with User Tier info to ensure valid context
     const transactions = await sql`
-      SELECT * FROM transactions 
-      WHERE id = ${transactionId} AND status = 'pending'
+      SELECT t.*, u.j_class 
+      FROM transactions t
+      JOIN users u ON t.user_id = u.id
+      WHERE t.id = ${transactionId} AND t.status = 'pending'
     `;
 
     if (!transactions || transactions.length === 0) {
@@ -17,22 +19,23 @@ export async function POST(req: Request) {
 
     const tx = transactions[0];
 
-    // 2. Logic Branching: Deposit (+) vs Withdrawal (-)
+    // 2. Logic Branching: Deposits (+) vs Withdrawals (-)
     if (tx.type === 'deposit') {
-      // Add money to the user's balance
+      // Approve Deposit: Add to User Balance
       await sql`
         UPDATE users 
         SET balance = balance + ${tx.amount} 
         WHERE id = ${tx.user_id}
       `;
-    } else if (tx.type === 'withdrawal') {
-      // Final check: Does the user still have the money?
-      const users = await sql`SELECT balance FROM users WHERE id = ${tx.user_id}`;
-      if (Number(users[0].balance) < Number(tx.amount)) {
-        return NextResponse.json({ message: "User no longer has sufficient balance" }, { status: 400 });
+    } 
+    else if (tx.type === 'withdrawal') {
+      // Double Check: Ensure user hasn't spent the money since the request
+      const userCheck = await sql`SELECT balance FROM users WHERE id = ${tx.user_id}`;
+      if (Number(userCheck[0].balance) < Number(tx.amount)) {
+        return NextResponse.json({ message: "Insufficient User Balance for this Withdrawal" }, { status: 400 });
       }
 
-      // Deduct money from the user's balance
+      // Approve Withdrawal: Deduct from User Balance
       await sql`
         UPDATE users 
         SET balance = balance - ${tx.amount} 
@@ -40,22 +43,20 @@ export async function POST(req: Request) {
       `;
     }
 
-    // 3. Mark the transaction as completed
+    // 3. Finalize: Mark as completed
     await sql`
       UPDATE transactions 
-      SET status = 'completed' 
+      SET status = 'completed', processed_at = NOW() 
       WHERE id = ${transactionId}
     `;
 
     return NextResponse.json({ 
-      message: `Successfully approved ${tx.type} of GHS ${tx.amount}` 
+      success: true, 
+      message: `Successfully processed ${tx.type} of GHS ${tx.amount}` 
     });
-    
+
   } catch (error: any) {
-    console.error("Approval error:", error);
-    return NextResponse.json(
-      { message: "Server error during approval" }, 
-      { status: 500 }
-    );
+    console.error("Admin Approval Error:", error);
+    return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
   }
 }

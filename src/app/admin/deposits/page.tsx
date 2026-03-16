@@ -1,24 +1,28 @@
 "use client";
 import { useEffect, useState } from "react";
-// FIXED: Using the @ alias or the correct 3-level relative path
-import AdminGuard from "@/components/AdminGuard"; 
+import { useRouter } from "next/navigation";
+import { Play, CheckCircle2, Timer, Tv, Clock, XCircle, CheckCircle } from "lucide-react";
+import AdminGuard from "@/components/AdminGuard";
 
 interface Transaction {
   id: number;
-  user_id: number;
+  user_id: string;
   amount: string;
   network: string;
   reference_id: string;
   status: string;
+  type: string;
+  created_at: string;
 }
 
 export default function AdminManageDeposits() {
   const [pending, setPending] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Unified fetch: Specifically looking for 'deposit' type and 'pending' status
   const fetchPending = async () => {
     try {
-      const res = await fetch("/api/transactions?status=pending");
+      const res = await fetch("/api/admin/transactions?type=deposit&status=pending");
       const data = await res.json();
       setPending(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -33,7 +37,7 @@ export default function AdminManageDeposits() {
   const handleApprove = async (id: number) => {
     if (!confirm("Confirm this payment? Money will be added to user balance.")) return;
     try {
-      const res = await fetch("/api/admin/approve", {
+      const res = await fetch("/api/admin/approve-transaction", {
         method: "POST",
         body: JSON.stringify({ transactionId: id }),
         headers: { "Content-Type": "application/json" },
@@ -48,9 +52,10 @@ export default function AdminManageDeposits() {
   };
 
   const handleReject = async (id: number) => {
-    if (!confirm("Reject this transaction? This will delete the request.")) return;
+    if (!confirm("Reject this transaction? This will mark it as rejected.")) return;
     try {
-      const res = await fetch("/api/admin/reject", {
+      // Pointing to a unified reject endpoint
+      const res = await fetch("/api/admin/reject-transaction", {
         method: "POST",
         body: JSON.stringify({ transactionId: id }),
         headers: { "Content-Type": "application/json" },
@@ -79,44 +84,52 @@ export default function AdminManageDeposits() {
           </header>
 
           {loading ? (
-            <p className="text-zinc-500 italic animate-pulse">Scanning database...</p>
+            <div className="flex items-center gap-3">
+              <Clock className="animate-spin text-yellow-500" size={18} />
+              <p className="text-zinc-500 italic text-sm">Scanning database...</p>
+            </div>
           ) : (
             <div className="grid gap-4">
-              {pending.length === 0 && (
-                <div className="p-12 border-2 border-dashed border-zinc-900 rounded-[40px] text-center">
-                  <p className="text-zinc-700 font-bold uppercase tracking-widest">No pending deposits found.</p>
+              {pending.length === 0 ? (
+                <div className="p-20 border-2 border-dashed border-zinc-900 rounded-[40px] text-center">
+                  <Clock className="mx-auto mb-4 text-zinc-800" size={48} />
+                  <p className="text-zinc-700 font-bold uppercase tracking-widest text-xs">No pending deposits found.</p>
                 </div>
-              )}
-              {pending.map((tx) => (
-                <div key={tx.id} className="bg-zinc-900 border border-zinc-800 p-6 rounded-[32px] flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:border-zinc-700 transition-all">
-                  <div className="space-y-1">
-                    <p className="text-[10px] text-zinc-500 uppercase font-black">User ID: {tx.user_id}</p>
-                    <h3 className="text-2xl font-black text-white italic">GHS {tx.amount}</h3>
-                    <div className="flex gap-2 mt-2">
-                      <span className="bg-blue-900/30 text-blue-400 text-[9px] px-2 py-0.5 rounded border border-blue-900 font-black uppercase">
-                        {tx.network}
-                      </span>
-                      <span className="bg-zinc-800 text-zinc-300 text-[9px] px-2 py-0.5 rounded border border-zinc-700 font-mono italic">
-                        ID: {tx.reference_id}
-                      </span>
+              ) : (
+                pending.map((tx) => (
+                  <div key={tx.id} className="bg-zinc-900 border border-zinc-800 p-6 rounded-[32px] flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:border-zinc-700 transition-all">
+                    <div className="space-y-1">
+                      <p className="text-[10px] text-zinc-500 uppercase font-black">User Account: {tx.user_id}</p>
+                      <h3 className="text-2xl font-black text-white italic">GHS {parseFloat(tx.amount).toFixed(2)}</h3>
+                      <div className="flex gap-2 mt-2">
+                        <span className="bg-blue-900/30 text-blue-400 text-[9px] px-2 py-0.5 rounded border border-blue-900 font-black uppercase">
+                          {tx.network || "MOMO"}
+                        </span>
+                        <span className="bg-zinc-800 text-zinc-300 text-[9px] px-2 py-0.5 rounded border border-zinc-700 font-mono italic">
+                          REF: {tx.reference_id || "N/A"}
+                        </span>
+                        <span className="text-zinc-600 text-[9px] font-bold uppercase py-0.5">
+                          {new Date(tx.created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3 w-full md:w-auto">
+                      <button 
+                        onClick={() => handleReject(tx.id)} 
+                        className="flex-1 md:flex-none p-4 bg-zinc-800 text-red-500 rounded-2xl border border-zinc-700 hover:bg-red-950 transition-all"
+                      >
+                        <XCircle size={20} />
+                      </button>
+                      <button 
+                        onClick={() => handleApprove(tx.id)} 
+                        className="flex-1 md:flex-none px-8 py-4 bg-yellow-500 hover:bg-yellow-400 text-black font-black rounded-2xl uppercase text-xs shadow-lg shadow-yellow-500/10 active:scale-95 transition-all flex items-center gap-2"
+                      >
+                        <CheckCircle size={18} /> Confirm Payment
+                      </button>
                     </div>
                   </div>
-
-                  <div className="flex gap-3 w-full md:w-auto">
-                    <button 
-                      onClick={() => handleReject(tx.id)} 
-                      className="flex-1 md:flex-none px-6 py-3 bg-red-950 text-red-500 font-black rounded-xl uppercase text-xs border border-red-900 hover:bg-red-900 hover:text-white transition-all"
-                    >
-                      Reject
-                    </button>
-                    <button 
-                      onClick={() => handleApprove(tx.id)} 
-                      className="flex-1 md:flex-none px-8 py-3 bg-yellow-500 hover:bg-yellow-400 text-black font-black rounded-xl uppercase text-xs shadow-lg shadow-yellow-500/10 active:scale-95 transition-all"
-                    >
-                      Confirm & Add Balance
-                    </button>
-                  </div>
-                </div>
+                )
               ))}
             </div>
           )}
