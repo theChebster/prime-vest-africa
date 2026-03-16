@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import sql from "@/lib/db";
 
-// Configuration based on your income structure PDF
 const TIER_CONFIG: Record<string, { videos: number; dailyTotal: number }> = {
   "Intern": { videos: 5, dailyTotal: 9.00 },
   "J1": { videos: 10, dailyTotal: 5.75 },
@@ -15,46 +14,61 @@ const TIER_CONFIG: Record<string, { videos: number; dailyTotal: number }> = {
 
 export async function POST(req: Request) {
   try {
-    const { userId } = await req.json();
+    const { userId, videoId } = await req.json();
 
-    // 1. Fetch user tier
-    const users = await sql`SELECT j_class FROM users WHERE id = ${userId}`;
+    if (!userId) return NextResponse.json({ message: "Auth required" }, { status: 401 });
+
+    // 1. Fetch user data
+    const users = await sql`SELECT j_class, balance FROM users WHERE id = ${userId}`;
     if (users.length === 0) return NextResponse.json({ message: "User not found" }, { status: 404 });
     
     const userTier = users[0].j_class || "Intern";
     const config = TIER_CONFIG[userTier];
 
-    // 2. Count how many videos they watched TODAY
-    const watchCount = await sql`
-      SELECT COUNT(id) FROM video_earnings 
-      WHERE user_id = ${userId} AND watched_at = CURRENT_DATE
+    // 2. Count videos watched today
+    // Note: Neon returns rows as an array, so we access [0]
+    const watchCountResult = await sql`
+      SELECT COUNT(*)::int as count FROM video_earnings 
+      WHERE user_id = ${userId} 
+      AND watched_at >= CURRENT_DATE
     `;
     
-    const count = parseInt(watchCount[0].count);
+    const count = watchCountResult[0].count;
 
     // 3. Check if limit reached
     if (count >= config.videos) {
       return NextResponse.json({ 
-        message: `Daily limit reached for ${userTier} (${config.videos} videos). Upgrade for more!` 
+        message: `Daily tasks complete for ${userTier}!` 
       }, { status: 400 });
     }
 
-    // 4. Calculate reward per video (Daily Total / Number of Videos)
-    const rewardPerVideo = config.dailyTotal / config.videos;
+    // 4. Calculate reward (rounding to 2 decimal places)
+    const rewardPerVideo = parseFloat((config.dailyTotal / config.videos).toFixed(2));
 
-    // 5. Update Balance and Record Watch
-    await sql`UPDATE users SET balance = balance + ${rewardPerVideo} WHERE id = ${userId}`;
+    // 5. Update Balance
     await sql`
-      INSERT INTO video_earnings (user_id, video_id, amount) 
-      VALUES (${userId}, ${'vid_' + (count + 1)}, ${rewardPerVideo})
+      UPDATE users 
+      SET balance = balance + ${rewardPerVideo} 
+      WHERE id = ${userId}
+    `;
+    
+    // 6. Record the watch event
+    await sql`
+      INSERT INTO video_earnings (user_id, video_id, amount, watched_at) 
+      VALUES (${userId}, ${videoId || 'gen_vid'}, ${rewardPerVideo}, NOW())
     `;
 
     return NextResponse.json({ 
-      message: `Reward claimed! (${count + 1}/${config.videos} completed)` 
+      message: `Reward claimed!`,
+      stats: {
+        completed: count + 1,
+        total: config.videos,
+        remaining: config.videos - (count + 1)
+      }
     });
 
   } catch (err: any) {
     console.error("WATCH_EARN_ERROR:", err.message);
-    return NextResponse.json({ message: "Server error" }, { status: 500 });
+    return NextResponse.json({ message: "Database error" }, { status: 500 });
   }
 }
