@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { Play, CheckCircle2, Timer, Tv } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 
-// 1. Your Video Library (You can add more here)
+// 1. Your Video Library
 const VIDEO_LIBRARY = [
   { id: "v1", title: "Global Market Trends", videoId: "qOVAbKKSH10", duration: 30 },
   { id: "v2", title: "Digital Asset Growth", videoId: "2g811Eo7K8U", duration: 30 },
@@ -26,6 +26,7 @@ export default function WatchPage() {
       timer = setInterval(() => setSeconds(prev => prev - 1), 1000);
     } else if (seconds === 0) {
       setCanClaim(true);
+      setIsPlaying(false); // Stop playing when done
     }
     return () => clearInterval(timer);
   }, [seconds, isPlaying]);
@@ -47,15 +48,33 @@ export default function WatchPage() {
     try {
       const res = await fetch("/api/earn/video", {
         method: "POST",
-        body: JSON.stringify({ userId: user.id, amount: 0.50, videoId: selectedVideo.id }),
+        body: JSON.stringify({ 
+          userId: user.id, 
+          videoId: selectedVideo.id 
+        }),
         headers: { "Content-Type": "application/json" }
       });
 
+      const data = await res.json();
+
       if (res.ok) {
-        alert("Success! GHS 0.50 added to your capital.");
+        // --- THE CHANGE IS HERE ---
+        // Update Local Storage so Balance reflects everywhere immediately
+        // We use data.rewardAmount returned from your updated API
+        const currentBalance = parseFloat(user.balance || "0");
+        const reward = parseFloat(data.rewardAmount || "0.50");
+        
+        const updatedUser = { 
+          ...user, 
+          balance: (currentBalance + reward).toFixed(2) 
+        };
+        
+        localStorage.setItem("pv_user", JSON.stringify(updatedUser));
+        // --------------------------
+
+        alert(`Success! GHS ${reward} added to your capital.`);
         router.push("/dashboard");
       } else {
-        const data = await res.json();
         alert(data.message || "Something went wrong.");
       }
     } catch (err) {
@@ -81,7 +100,7 @@ export default function WatchPage() {
 
         {/* --- THE PLAYER BOX --- */}
         <div className="relative aspect-video bg-zinc-900 rounded-[32px] overflow-hidden border border-zinc-800 shadow-2xl mb-8">
-          {!isPlaying ? (
+          {!isPlaying && !canClaim ? (
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-zinc-900/90 backdrop-blur-sm">
                 <button 
                   onClick={() => setIsPlaying(true)}
@@ -98,7 +117,7 @@ export default function WatchPage() {
               
               <iframe 
                 className="w-full h-full"
-                src={`https://www.youtube.com/embed/${selectedVideo.videoId}?autoplay=1&controls=0&mute=0&rel=0&modestbranding=1`} 
+                src={`https://www.youtube.com/embed/${selectedVideo.videoId}?autoplay=${isPlaying ? 1 : 0}&controls=0&mute=0&rel=0&modestbranding=1`} 
                 allow="autoplay"
               />
             </>
@@ -119,9 +138,9 @@ export default function WatchPage() {
                 <button 
                   onClick={handleClaim}
                   disabled={loading}
-                  className="w-full max-w-sm py-5 bg-white text-black font-black rounded-2xl uppercase tracking-[0.2em] text-xs hover:bg-yellow-500 transition-all flex items-center justify-center gap-2"
+                  className="w-full max-w-sm py-5 bg-yellow-500 text-black font-black rounded-2xl uppercase tracking-[0.2em] text-xs hover:bg-yellow-400 transition-all flex items-center justify-center gap-2"
                 >
-                  {loading ? "Verifying..." : <><CheckCircle2 size={18}/> Claim GHS 0.50</>}
+                  {loading ? "Verifying..." : <><CheckCircle2 size={18}/> Claim Reward Now</>}
                 </button>
             )}
         </div>

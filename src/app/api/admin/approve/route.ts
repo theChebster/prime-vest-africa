@@ -17,24 +17,39 @@ export async function POST(req: Request) {
 
     const tx = transactions[0];
 
-    // 2. Perform the update: Add balance and Mark as completed
-    // We execute these one after the other.
-    
-    // Add money to the user's balance
-    await sql`
-      UPDATE users 
-      SET balance = balance + ${tx.amount} 
-      WHERE id = ${tx.user_id}
-    `;
+    // 2. Logic Branching: Deposit (+) vs Withdrawal (-)
+    if (tx.type === 'deposit') {
+      // Add money to the user's balance
+      await sql`
+        UPDATE users 
+        SET balance = balance + ${tx.amount} 
+        WHERE id = ${tx.user_id}
+      `;
+    } else if (tx.type === 'withdrawal') {
+      // Final check: Does the user still have the money?
+      const users = await sql`SELECT balance FROM users WHERE id = ${tx.user_id}`;
+      if (Number(users[0].balance) < Number(tx.amount)) {
+        return NextResponse.json({ message: "User no longer has sufficient balance" }, { status: 400 });
+      }
 
-    // Mark the transaction as completed so it can't be approved again
+      // Deduct money from the user's balance
+      await sql`
+        UPDATE users 
+        SET balance = balance - ${tx.amount} 
+        WHERE id = ${tx.user_id}
+      `;
+    }
+
+    // 3. Mark the transaction as completed
     await sql`
       UPDATE transactions 
       SET status = 'completed' 
       WHERE id = ${transactionId}
     `;
 
-    return NextResponse.json({ message: "Approved successfully!" });
+    return NextResponse.json({ 
+      message: `Successfully approved ${tx.type} of GHS ${tx.amount}` 
+    });
     
   } catch (error: any) {
     console.error("Approval error:", error);

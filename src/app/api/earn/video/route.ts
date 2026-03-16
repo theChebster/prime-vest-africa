@@ -16,59 +16,44 @@ export async function POST(req: Request) {
   try {
     const { userId, videoId } = await req.json();
 
-    if (!userId) return NextResponse.json({ message: "Auth required" }, { status: 401 });
-
-    // 1. Fetch user data
+    // 1. Fetch User
     const users = await sql`SELECT j_class, balance FROM users WHERE id = ${userId}`;
     if (users.length === 0) return NextResponse.json({ message: "User not found" }, { status: 404 });
     
     const userTier = users[0].j_class || "Intern";
     const config = TIER_CONFIG[userTier];
 
-    // 2. Count videos watched today
-    // Note: Neon returns rows as an array, so we access [0]
+    // 2. Check Daily Limit
     const watchCountResult = await sql`
       SELECT COUNT(*)::int as count FROM video_earnings 
-      WHERE user_id = ${userId} 
-      AND watched_at >= CURRENT_DATE
+      WHERE user_id = ${userId} AND watched_at >= CURRENT_DATE
     `;
-    
     const count = watchCountResult[0].count;
 
-    // 3. Check if limit reached
     if (count >= config.videos) {
-      return NextResponse.json({ 
-        message: `Daily tasks complete for ${userTier}!` 
-      }, { status: 400 });
+      return NextResponse.json({ message: "Daily limit reached!" }, { status: 400 });
     }
 
-    // 4. Calculate reward (rounding to 2 decimal places)
-    const rewardPerVideo = parseFloat((config.dailyTotal / config.videos).toFixed(2));
+    // 3. Math & Database Updates
+    const reward = parseFloat((config.dailyTotal / config.videos).toFixed(2));
 
-    // 5. Update Balance
-    await sql`
-      UPDATE users 
-      SET balance = balance + ${rewardPerVideo} 
-      WHERE id = ${userId}
-    `;
+    // Update Balance
+    await sql`UPDATE users SET balance = balance + ${reward} WHERE id = ${userId}`;
     
-    // 6. Record the watch event
+    // Add to History (So user sees it in their "Statement")
+    await sql`
+      INSERT INTO transactions (user_id, amount, type, status, created_at) 
+      VALUES (${userId}, ${reward}, 'video_reward', 'completed', NOW())
+    `;
+
+    // Log the watch for limit checking
     await sql`
       INSERT INTO video_earnings (user_id, video_id, amount, watched_at) 
-      VALUES (${userId}, ${videoId || 'gen_vid'}, ${rewardPerVideo}, NOW())
+      VALUES (${userId}, ${videoId || 'gen_vid'}, ${reward}, NOW())
     `;
 
-    return NextResponse.json({ 
-      message: `Reward claimed!`,
-      stats: {
-        completed: count + 1,
-        total: config.videos,
-        remaining: config.videos - (count + 1)
-      }
-    });
-
+    return NextResponse.json({ success: true, rewardAmount: reward });
   } catch (err: any) {
-    console.error("WATCH_EARN_ERROR:", err.message);
-    return NextResponse.json({ message: "Database error" }, { status: 500 });
+    return NextResponse.json({ message: "Server Error" }, { status: 500 });
   }
 }
