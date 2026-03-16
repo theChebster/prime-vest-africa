@@ -5,7 +5,11 @@ export async function POST(req: Request) {
   try {
     const { transactionId } = await req.json();
 
-    // 1. Get the transaction details
+    if (!transactionId) {
+      return NextResponse.json({ message: "Transaction ID required" }, { status: 400 });
+    }
+
+    // 1. Fetch transaction
     const transactions = await sql`
       SELECT * FROM transactions 
       WHERE id = ${transactionId} AND status = 'pending'
@@ -16,23 +20,20 @@ export async function POST(req: Request) {
     }
 
     const tx = transactions[0];
+    const txType = tx.type ? tx.type.toLowerCase() : 'deposit';
 
-    // 2. Logic Branching: Deposit (+) vs Withdrawal (-)
-    if (tx.type === 'deposit') {
-      // Add money to the user's balance
+    // 2. Execute updates sequentially (Neon compatible)
+    if (txType === 'deposit') {
       await sql`
         UPDATE users 
         SET balance = balance + ${tx.amount} 
         WHERE id = ${tx.user_id}
       `;
-    } else if (tx.type === 'withdrawal') {
-      // Final check: Does the user still have the money?
+    } else if (txType === 'withdrawal') {
       const users = await sql`SELECT balance FROM users WHERE id = ${tx.user_id}`;
-      if (Number(users[0].balance) < Number(tx.amount)) {
-        return NextResponse.json({ message: "User no longer has sufficient balance" }, { status: 400 });
+      if (!users[0] || Number(users[0].balance) < Number(tx.amount)) {
+        return NextResponse.json({ message: "Insufficient balance" }, { status: 400 });
       }
-
-      // Deduct money from the user's balance
       await sql`
         UPDATE users 
         SET balance = balance - ${tx.amount} 
@@ -40,7 +41,7 @@ export async function POST(req: Request) {
       `;
     }
 
-    // 3. Mark the transaction as completed
+    // 3. Mark as completed
     await sql`
       UPDATE transactions 
       SET status = 'completed' 
@@ -48,13 +49,14 @@ export async function POST(req: Request) {
     `;
 
     return NextResponse.json({ 
-      message: `Successfully approved ${tx.type} of GHS ${tx.amount}` 
+      success: true,
+      message: `Successfully approved ${txType} of GHS ${tx.amount}` 
     });
     
   } catch (error: any) {
     console.error("Approval error:", error);
     return NextResponse.json(
-      { message: "Server error during approval" }, 
+      { message: "Internal Server Error" }, 
       { status: 500 }
     );
   }
