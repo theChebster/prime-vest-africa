@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { UserPlus, Smartphone, Lock, Loader2 } from "lucide-react";
 
 export default function Register() {
   const [form, setForm] = useState({ fullName: "", phoneNumber: "", password: "" });
@@ -13,72 +14,103 @@ export default function Register() {
     setLoading(true);
 
     try {
-      // Use a relative path. Do NOT include http://localhost
-      const res = await fetch("/api/register", {
+      // API Path check: matches src/app/api/auth/register/route.ts
+      const res = await fetch("/api/auth/register", {
         method: "POST",
         body: JSON.stringify(form),
-        headers: { 
-          "Content-Type": "application/json",
-          "Accept": "application/json" 
-        },
+        headers: { "Content-Type": "application/json" },
       });
-
-      // CHECK: Did the server return HTML instead of JSON?
-      const contentType = res.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        const textError = await res.text();
-        console.error("Server returned non-JSON:", textError);
-        throw new Error("The server sent back a webpage instead of data. Check your API folder path.");
-      }
 
       const data = await res.json();
       setLoading(false);
 
       if (res.ok) {
-        alert("Success! Welcome to Prime Vest Africa.");
-        router.push("/login"); 
+        alert("Registration Successful! Welcome to Prime Vest.");
+        router.push("/login"); // Corrected path
       } else {
-        alert(data.message || "Registration failed");
+        alert(data.message || data.details || "Registration failed");
       }
-    } catch (err: any) {
+    } catch (err) {
       setLoading(false);
-      alert(`Error: ${err.message}`);
+      alert("Network error. Please check your connection.");
     }
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-black text-white p-4">
-      <h1 className="text-4xl font-black mb-8 text-yellow-500 uppercase italic">Prime Vest</h1>
-      <form onSubmit={handleRegister} className="w-full max-w-md space-y-4 bg-gray-900 p-8 rounded-3xl border border-gray-800">
-        <input
-          type="text"
-          placeholder="Full Name"
-          className="w-full p-4 rounded-xl bg-black border border-gray-700 focus:border-yellow-500 outline-none"
-          onChange={(e) => setForm({ ...form, fullName: e.target.value })}
-          required
-        />
-        <input
-          type="text"
-          placeholder="Phone Number"
-          className="w-full p-4 rounded-xl bg-black border border-gray-700 focus:border-yellow-500 outline-none"
-          onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })}
-          required
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          className="w-full p-4 rounded-xl bg-black border border-gray-700 focus:border-yellow-500 outline-none"
-          onChange={(e) => setForm({ ...form, password: e.target.value })}
-          required
-        />
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full p-4 bg-yellow-600 hover:bg-yellow-500 text-black font-black rounded-xl uppercase"
-        >
-          {loading ? "Processing..." : "Create Account"}
-        </button>
-      </form>
+    <div className="flex flex-col items-center justify-center min-h-screen bg-black text-white p-6">
+      <div className="w-full max-w-sm">
+        <header className="text-center mb-10">
+          <h1 className="text-3xl font-black text-yellow-500 italic uppercase tracking-tighter">
+            Prime Vest Africa
+          </h1>
+          <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.3em] mt-2">
+            Asset Growth Protocol
+          </p>
+        </header>
+
+        <form onSubmit={handleRegister} className="space-y-4 bg-zinc-900/40 p-8 rounded-[40px] border border-zinc-800 backdrop-blur-md">
+          {/* Full Name Input */}
+          <div className="relative">
+            <UserPlus className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
+            <input
+              type="text"
+              placeholder="Full Name"
+              className="w-full p-5 pl-12 rounded-2xl bg-black border border-zinc-800 outline-none focus:border-yellow-600 text-yellow-500 transition-all placeholder:text-zinc-700"
+              onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+              required
+            />
+          </div>
+
+          {/* Phone Number Input */}
+          <div className="relative">
+            <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
+            <input
+              type="text"
+              placeholder="Phone Number (MoMo)"
+              className="w-full p-5 pl-12 rounded-2xl bg-black border border-zinc-800 outline-none focus:border-yellow-600 text-yellow-500 transition-all placeholder:text-zinc-700"
+              onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })}
+              required
+            />
+          </div>
+
+          {/* Password Input */}
+          <div className="relative">
+            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
+            <input
+              type="password"
+              placeholder="Create Password"
+              className="w-full p-5 pl-12 rounded-2xl bg-black border border-zinc-800 outline-none focus:border-yellow-600 text-yellow-500 transition-all placeholder:text-zinc-700"
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              required
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full p-5 bg-yellow-600 hover:bg-yellow-500 rounded-2xl font-black text-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="animate-spin" size={20} />
+                Initializing...
+              </>
+            ) : (
+              "Join the Team"
+            )}
+          </button>
+        </form>
+
+        <p className="text-center mt-8 text-zinc-500 text-xs font-bold uppercase tracking-tight">
+          Already a member?{" "}
+          <button 
+            onClick={() => router.push("/login")}
+            className="text-yellow-500 hover:underline"
+          >
+            Sign In
+          </button>
+        </p>
+      </div>
     </div>
   );
 }
